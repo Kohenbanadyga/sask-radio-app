@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Saskatchewan Radio</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1db954">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial;
+    background: #0a0a0a;
+    color: white;
+}
+
+header {
+    padding: 15px;
+    text-align: center;
+    background: #1db954;
+    font-size: 20px;
+}
+
+.topbar {
+    padding: 10px;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    font-size: 16px;
+}
+
+.container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 12px;
+}
+
+@media (min-width: 600px) {
+    .container {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 900px) {
+    .container {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.card {
+    background: #1c1c1c;
+    padding: 15px;
+    border-radius: 14px;
+}
+
+button {
+    width: 100%;
+    margin-top: 10px;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    background: #1db954;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.player {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    background: #111;
+    padding: 10px;
+    border-top: 1px solid #333;
+}
+
+#songTitle {
+    font-size: 12px;
+    color: #aaa;
+}
+
+audio {
+    width: 100%;
+}
+</style>
+</head>
+
+<body>
+
+<header>🎧 Saskatchewan Radio</header>
+
+<div class="topbar">
+    <input id="search" placeholder="Search stations..." onkeyup="render()">
+</div>
+
+<div class="container" id="stations"></div>
+
+<div class="player">
+    <div id="nowPlaying">Nothing playing</div>
+    <div id="songTitle">No song data</div>
+    <audio id="player" controls></audio>
+</div>
+
+<script>
+let stations = [];
+let currentStream = "";
+let metadataInterval = null;
+
+// LOAD API
+async function loadStations() {
+    const res = await fetch("https://de1.api.radio-browser.info/json/stations/bycountry/Canada");
+    const data = await res.json();
+
+    stations = data.filter(s =>
+        s.state && s.state.toLowerCase().includes("sask")
+    ).slice(0, 100);
+
+    render();
+}
+
+function render() {
+    const container = document.getElementById("stations");
+    const search = document.getElementById("search").value.toLowerCase();
+
+    container.innerHTML = "";
+
+    stations
+        .filter(s => s.name.toLowerCase().includes(search))
+        .forEach(s => {
+            const div = document.createElement("div");
+            div.className = "card";
+
+            div.innerHTML = `
+                <h3>${s.name}</h3>
+                <p>${s.tags || "Unknown"}</p>
+                <button onclick="play('${s.url_resolved}','${s.name}')">Play</button>
+            `;
+
+            container.appendChild(div);
+        });
+}
+
+function play(url, name) {
+    const player = document.getElementById("player");
+
+    player.src = url;
+    player.play();
+
+    currentStream = url;
+    document.getElementById("nowPlaying").textContent = "Now Playing: " + name;
+
+    // 🔥 Media Session (helps background play)
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: name,
+            artist: "Live Radio",
+            album: "Saskatchewan Radio",
+            artwork: [
+                { src: 'https://cdn-icons-png.flaticon.com/512/727/727245.png', sizes: '192x192', type: 'image/png' }
+            ]
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => player.play());
+        navigator.mediaSession.setActionHandler('pause', () => player.pause());
+    }
+
+    startMetadata();
+}
+
+// METADATA
+function startMetadata() {
+    if (metadataInterval) clearInterval(metadataInterval);
+
+    metadataInterval = setInterval(async () => {
+        if (!currentStream) return;
+
+        try {
+            const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${currentStream}`);
+            const text = await res.text();
+
+            if (text.includes("StreamTitle")) {
+                const match = text.match(/StreamTitle='([^']*)'/);
+                if (match) {
+                    document.getElementById("songTitle").textContent = match[1];
+                }
+            }
+        } catch {
+            document.getElementById("songTitle").textContent = "No metadata";
+        }
+    }, 15000);
+}
+
+// SERVICE WORKER
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js");
+}
+
+loadStations();
+</script>
+
+</body>
+</html>

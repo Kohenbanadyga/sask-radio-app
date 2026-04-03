@@ -1,0 +1,13 @@
+{
+  "background_color": "#0a0a0a",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "saskradio.atwebpages",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "saskradio.",
+  "start_url": "/https://saskradio.atwebpages.com/",
+  "theme_color": "#1db954",
+  "id": "saskradio",
+  "lang": "en"
+}
